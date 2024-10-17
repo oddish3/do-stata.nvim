@@ -186,13 +186,3 @@ return {
   execute_cell = M.execute_cell,
   config = M.config
 }
-
-
-
-    -- keys = {
-    --   { "<leader>r", "<cmd>DoStata<cr>", desc = "Run Stata code" },
-    --   { "<F1>", function() require("do-stata").show_help() end, desc = "Show Stata help" },
-    --   { "<F2>", function() require("do-stata").show_data_browser() end, desc = "Show Stata data browser" },
-    --   { "<leader>F", function() require("do-stata").execute_cell() end, desc = "Execute Stata cell" },
-    -- },
-    -- cmd = { "DoStata", "DoStataFile" },
