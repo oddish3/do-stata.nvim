@@ -44,7 +44,15 @@ M.get_selected_text_or_word = function()
   if mode == 'v' or mode == 'V' then
     local start_pos = vim.fn.getpos("'<")
     local end_pos = vim.fn.getpos("'>")
+    if start_pos == nil or end_pos == nil then
+      print("Error: Unable to get selection positions")
+      return ""
+    end
     local lines = vim.api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+    if #lines == 0 then
+      print("Error: No lines in selection")
+      return ""
+    end
     if #lines == 1 then
       return lines[1]:sub(start_pos[3], end_pos[3])
     else
@@ -53,7 +61,8 @@ M.get_selected_text_or_word = function()
       return table.concat(lines, "\n")
     end
   else
-    return vim.fn.expand("<cword>")
+    local word = vim.fn.expand("<cword>")
+    return word ~= nil and word or ""
   end
 end
 
