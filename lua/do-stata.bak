@@ -1,16 +1,15 @@
 local M = {}
 
--- Global variable to track if Stata has been opened this session
-M.stata_opened = false
-
 ---@class Config
 ---@field stata_ver "StataBE" | "StataSE" | "StataMP"
 M.config = {
   stata_ver = "StataMP",
-  cell_delimiter = "//%%"
+  cell_delimiter = "//%%",
+  auto_focus_neovim = false  -- Set to true if you want to auto-focus Neovim after running Stata commands
 }
 
 M.get_text = function()
+  ---Checks if current mode is visual mode
   local function is_vmode()
     local mode = vim.api.nvim_get_mode().mode
     return mode == 'v' or mode == 'V'
@@ -22,23 +21,33 @@ M.get_text = function()
   local text = ''
 
   if is_vmode() then
+    -- visual mode need to be exited to update marker
     vim.api.nvim_feedkeys(esc, 'x', false)
     line_start = vim.fn.getpos("'<")[2] - 1
     line_end = vim.fn.getpos("'>")[2]
   end
 
   local lines = vim.api.nvim_buf_get_lines(0, line_start, line_end, false)
-  return table.concat(lines, '\n')
+
+  for _, line in ipairs(lines) do
+    text = text .. line .. '\n'
+  end
+
+  return text
 end
 
+---Write file to a given path
+---@param text string Text content to write
+---@param filename string File path and name
 M.save_file = function(text, filename)
   local file = io.open(filename, "w")
-  if file then
+  if file ~= nil then
     file:write(text)
     file:close()
   end
 end
 
+--- new function
 M.get_selected_text_or_word = function()
   local mode = vim.api.nvim_get_mode().mode
   if mode == 'v' or mode == 'V' then
@@ -57,23 +66,25 @@ M.get_selected_text_or_word = function()
   end
 end
 
-M.ensure_stata_running = function()
-  if not M.stata_opened then
-    local is_running = vim.fn.system('pgrep -q "' .. M.config.stata_ver .. '"; echo $?')
-    if tonumber(is_running) ~= 0 then
-      vim.fn.system('open -a "' .. M.config.stata_ver .. '"')
-    end
-    M.stata_opened = true
-  end
-end
-
+--- new function 
 M.run_do = function(filename)
   M.ensure_stata_running()
+
+  local focus_stata = vim.fn.system('yabai -m query --windows | jq -r ".[] | select(.app==\"' .. M.config.stata_ver .. '\") | .id"')
+  focus_stata = focus_stata:gsub("%s+", "")  -- Remove any whitespace
 
   local output = vim.fn.system {
     'osascript',
     '-e',
+    'tell application "System Events"',
+    '-e',
+    'set frontmost of process "' .. M.config.stata_ver .. '" to true',
+    '-e',
+    'end tell',
+    '-e',
     string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    'activate',
     '-e',
     string.format('DoCommandAsync \"do %s\"', filename),
     '-e',
@@ -83,13 +94,20 @@ M.run_do = function(filename)
   if string.sub(output, 1, 1) ~= '0' then
     print('Error executing Stata!')
   end
+
+  -- Focus Stata window using yabai
+  if focus_stata ~= "" then
+    vim.fn.system('yabai -m window --focus ' .. focus_stata)
+  end
 end
 
+--- new function
 M.execute_cell = function()
   local current_line = vim.api.nvim_win_get_cursor(0)[1]
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local cell_start, cell_end = current_line, current_line
 
+  -- Find cell boundaries
   while cell_start > 1 and not lines[cell_start-1]:match("^" .. M.config.cell_delimiter) do
     cell_start = cell_start - 1
   end
@@ -103,18 +121,47 @@ M.execute_cell = function()
   M.run_do(tempname)
 end
 
+-- new function
+M.ensure_stata_running = function()
+  local is_running = vim.fn.system('pgrep -q "' .. M.config.stata_ver .. '"; echo $?')
+  if tonumber(is_running) ~= 0 then
+    -- Get the current space
+    local current_space = vim.fn.system('yabai -m query --spaces --space | jq .index'):gsub("%s+", "")
+    
+    -- Open Stata
+    vim.fn.system('open -a "' .. M.config.stata_ver .. '"')
+    
+    -- Wait a bit for Stata to open
+    vim.fn.system('sleep 2')
+    
+    -- Get the ID of the newly opened Stata window
+    local stata_window = vim.fn.system('yabai -m query --windows | jq -r ".[] | select(.app==\"' .. M.config.stata_ver .. '\") | .id"'):gsub("%s+", "")
+    
+    -- Move Stata to the current space
+    vim.fn.system('yabai -m window --space ' .. current_space .. ' ' .. stata_window)
+    
+    -- Split the focused window and move Stata into the new split
+    vim.fn.system('yabai -m window --split auto')
+    vim.fn.system('yabai -m window ' .. stata_window .. ' --focus')
+  end
+end
+
+--- new function
 M.show_help = function()
   local selected_text = M.get_selected_text_or_word()
   local help_command = string.format('help %s', selected_text)
-  M.run_do(help_command)
+  M.run_do_command(help_command)
 end
 
+--- new function
 M.show_data_browser = function()
   local selected_vars = M.get_selected_text_or_word()
   local browse_command = string.format('browse %s', selected_vars)
-  M.run_do(browse_command)
+  M.run_do_command(browse_command)
 end
 
+
+--- new function
 M.run_whole_file = function()
   local text = table.concat(vim.api.nvim_buf_get_lines(0, 0, -1, false), '\n')
   local tempname = string.format('%s.do', vim.fn.tempname())
@@ -122,26 +169,38 @@ M.run_whole_file = function()
   M.run_do(tempname)
 end
 
+M.focus_neovim = function()
+  local neovim_window = vim.fn.system('yabai -m query --windows | jq -r ".[] | select(.app==\"Neovim\") | .id"')
+  neovim_window = neovim_window:gsub("%s+", "")
+  if neovim_window ~= "" then
+    vim.fn.system('yabai -m window --focus ' .. neovim_window)
+  end
+end
+
+---Get content of current buffer (or selected lines) and send to Stata
 M.run_line = function()
   local tempname = string.format('%s.do', vim.fn.tempname())
   local text = M.get_text()
+
   M.save_file(text, tempname)
   M.run_do(tempname)
 end
 
+---@param opts Config | nil
 M.setup = function(opts)
   local map = vim.keymap.set
 
   M.config = vim.tbl_extend("force", M.config, opts or {})
 
+  if M.config.auto_focus_neovim then
+    vim.defer_fn(function()
+      M.focus_neovim()
+    end, 500)  -- Wait for 500ms before focusing Neovim
+  end
+
   vim.api.nvim_create_user_command("DoStata", function()
     require("do-stata").run_line()
   end, { nargs = '*', desc = "Run do file in Stata" })
-  
-  vim.api.nvim_create_user_command("DoStataFile", function()
-    require("do-stata").run_whole_file()
-  end, { nargs = 0, desc = "Run entire file in Stata" })
-
   map("n", "<leader>r", "<cmd>DoStata<cr>")
   map("v", "<leader>r", "<cmd>DoStata<cr>")
   map("n", "<leader>R", "<cmd>DoStataFile<cr>")
