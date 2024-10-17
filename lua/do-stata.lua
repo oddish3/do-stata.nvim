@@ -148,25 +148,6 @@ M.run_up_to_line = function()
   M.run_do(tempname)
 end
 
-M.send_to_stata_command = function()
-  local selected_text = M.get_selected_text_or_word()
-  M.ensure_stata_running()
-
-  local output = vim.fn.system {
-    'osascript',
-    '-e',
-    string.format('tell application \"%s\"', M.config.stata_ver),
-    '-e',
-    string.format('DoCommandAsync \"%s\"', selected_text:gsub('"', '\\"')),
-    '-e',
-    'end tell'
-  }
-
-  if string.sub(output, 1, 1) ~= '0' then
-    print('Error sending command to Stata!')
-  end
-end
-
 M.setup = function(opts)
   local map = vim.keymap.set
 
@@ -183,13 +164,6 @@ M.setup = function(opts)
   vim.api.nvim_create_user_command("DoStataUpToLine", function()
     require("do-stata").run_up_to_line()
   end, { nargs = 0, desc = "Run Stata code up to current line" })
-
-  vim.api.nvim_create_user_command("SendToStataCommand", function()
-    require("do-stata").send_to_stata_command()
-  end, { nargs = 0, desc = "Send selected text to Stata command window" })
-
-  map("n", "<leader>s", "<cmd>SendToStataCommand<cr>")
-  map("v", "<leader>s", "<cmd>SendToStataCommand<cr>")
 
   map("n", "<leader>r", "<cmd>DoStata<cr>")
   map("v", "<leader>r", "<cmd>DoStata<cr>")
@@ -210,7 +184,6 @@ return {
   show_help = M.show_help,
   show_data_browser = M.show_data_browser,
   execute_cell = M.execute_cell,
-  send_to_stata_command = M.send_to_stata_command,
   config = M.config
 }
 
