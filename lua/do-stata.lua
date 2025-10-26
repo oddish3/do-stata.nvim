@@ -283,10 +283,9 @@ M.run_up_to_line = function()
 end
 
 M.setup = function(opts)
-  local map = vim.keymap.set
-
   M.config = vim.tbl_extend("force", M.config, opts or {})
 
+  -- user commands are fine to define globally
   vim.api.nvim_create_user_command("DoStata", function()
     require("do-stata").run_line()
   end, { nargs = '*', desc = "Run do file in Stata" })
@@ -299,24 +298,30 @@ M.setup = function(opts)
     require("do-stata").run_up_to_line()
   end, { nargs = 0, desc = "Run Stata code up to current line" })
 
-  -- Change the mapping to start Stata with 'rr'
-  
-map("n", "<leader>ss", M.start_stata, { noremap = true, silent = true, desc = "Start Stata" })
-map("n", "<leader>sq", M.quit_stata, { noremap = true, silent = true, desc = "Quit Stata" })
-map("n", "<leader>sc", M.clear_memory, { noremap = true, silent = true, desc = "Clear Memory" })
-map("n", "<leader>sw", M.set_working_directory, { noremap = true, silent = true, desc = "Set Working Directory" })
-map("n", "<leader>sv", M.describe_variables, { noremap = true, silent = true, desc = "Describe Variables" })
-map("n", "<leader>sm", M.summarize_variables, { noremap = true, silent = true, desc = "Summarize Variables" })
-map("n", "<leader>sd", "<cmd>DoStata<cr>", { noremap = true, silent = true, desc = "Run Stata Command" })
-map("v", "<leader>sd", "<cmd>DoStata<cr>", { noremap = true, silent = true, desc = "Run Stata Command (Visual)" })
-map("n", "<leader>sr", "<cmd>DoStataFile<cr>", { noremap = true, silent = true, desc = "Run Stata File" })
-map("n", "<leader>su", "<cmd>DoStataUpToLine<cr>", { noremap = true, silent = true, desc = "Run Up to Line" })
-map("n", "<F1>", M.show_help, { noremap = true, silent = true, desc = "Show Help" })
-map("v", "<F1>", M.show_help, { noremap = true, silent = true, desc = "Show Help (Visual)" })
-map("n", "<F2>", M.show_data_browser, { noremap = true, silent = true, desc = "Show Data Browser" })
-map("v", "<F2>", M.show_data_browser, { noremap = true, silent = true, desc = "Show Data Browser (Visual)" })
-map("n", "<leader>se", M.execute_cell, { noremap = true, silent = true, desc = "Execute Cell" })
-
+  -- define mappings only for stata buffers
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = "stata",
+    callback = function(args)
+      local map = function(mode, lhs, rhs, desc)
+        vim.keymap.set(mode, lhs, rhs, { buffer = args.buf, noremap = true, silent = true, desc = desc })
+      end
+      map("n", "<leader>ss", M.start_stata, "Start Stata")
+      map("n", "<leader>sq", M.quit_stata, "Quit Stata")
+      map("n", "<leader>sc", M.clear_memory, "Clear Memory")
+      map("n", "<leader>sw", M.set_working_directory, "Set Working Directory")
+      map("n", "<leader>sv", M.describe_variables, "Describe Variables")
+      map("n", "<leader>sm", M.summarize_variables, "Summarize Variables")
+      map("n", "<leader>sd", "<cmd>DoStata<cr>", "Run Stata Command")
+      map("v", "<leader>sd", "<cmd>DoStata<cr>", "Run Stata Command (Visual)")
+      map("n", "<leader>sr", "<cmd>DoStataFile<cr>", "Run Stata File")
+      map("n", "<leader>su", "<cmd>DoStataUpToLine<cr>", "Run Up to Line")
+      map("n", "<F1>", M.show_help, "Show Help")
+      map("v", "<F1>", M.show_help, "Show Help (Visual)")
+      map("n", "<F2>", M.show_data_browser, "Show Data Browser")
+      map("v", "<F2>", M.show_data_browser, "Show Data Browser (Visual)")
+      map("n", "<leader>se", M.execute_cell, "Execute Cell")
+    end,
+  })
 end
 
 return {
