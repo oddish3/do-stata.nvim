@@ -10,6 +10,117 @@ M.config = {
   cell_delimiter = "//%%"
 }
 
+M.start_stata = function()
+  if not M.stata_opened then
+    vim.fn.system('open -a "' .. M.config.stata_ver .. '"')
+    M.stata_opened = true
+    print("Stata started!")
+  else
+    print("Stata is already running!")
+  end
+end
+
+M.quit_stata = function()
+  if M.stata_opened then
+    vim.fn.system {
+      'osascript',
+      '-e',
+      string.format('tell application \"%s\"', M.config.stata_ver),
+      '-e',
+      'quit',
+      '-e',
+      'end tell'
+    }
+    M.stata_opened = false
+    print("Stata closed!")
+  else
+    print("Stata is not running!")
+  end
+end
+
+M.clear_memory = function(clear_type)
+  local command
+  if clear_type == "all" then
+    command = "clear all"
+  elseif clear_type == "matrix" then
+    command = "clear matrix"
+  elseif clear_type == "results" then
+    command = "clear results"
+  elseif clear_type == "programs" then
+    command = "clear programs"
+  else
+    command = "clear"
+  end
+
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
+  print("Stata " .. command .. " executed!")
+end
+
+M.set_working_directory = function()
+  local current_file = vim.fn.expand('%:p:h')
+  local command = string.format('cd "%s"', current_file)
+  
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
+  print("Working directory set to: " .. current_file)
+end
+
+M.describe_variables = function()
+  local selected_vars = M.get_selected_text_or_word()
+  local command
+  if selected_vars ~= "" then
+    command = "describe " .. selected_vars
+  else
+    command = "describe"
+  end
+
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
+end
+
+-- Function to summarize variables
+M.summarize_variables = function()
+  local selected_vars = M.get_selected_text_or_word()
+  local command
+  if selected_vars ~= "" then
+    command = "summarize " .. selected_vars
+  else
+    command = "summarize"
+  end
+
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
+end
+
 M.get_text = function()
   local function is_vmode()
     local mode = vim.api.nvim_get_mode().mode
@@ -114,14 +225,37 @@ end
 
 M.show_help = function()
   local selected_text = M.get_selected_text_or_word()
-  local help_command = string.format('help %s', selected_text)
-  M.run_do(help_command)
+  local command = "help " .. selected_text
+
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
 end
 
 M.show_data_browser = function()
   local selected_vars = M.get_selected_text_or_word()
-  local browse_command = string.format('browse %s', selected_vars)
-  M.run_do(browse_command)
+  local command
+  if selected_vars ~= "" then
+    command = "browse " .. selected_vars
+  else
+    command = "browse"
+  end
+
+  local output = vim.fn.system {
+    'osascript',
+    '-e',
+    string.format('tell application \"%s\"', M.config.stata_ver),
+    '-e',
+    string.format('DoCommandAsync \"%s\"', command),
+    '-e',
+    'end tell'
+  }
 end
 
 M.run_whole_file = function()
@@ -165,24 +299,39 @@ M.setup = function(opts)
     require("do-stata").run_up_to_line()
   end, { nargs = 0, desc = "Run Stata code up to current line" })
 
-  map("n", "<leader>r", "<cmd>DoStata<cr>")
-  map("v", "<leader>r", "<cmd>DoStata<cr>")
-  map("n", "<leader>R", "<cmd>DoStataFile<cr>")
-  map("n", "<leader>u", "<cmd>DoStataUpToLine<cr>")  -- New mapping for run_up_to_line
-  map("n", "<F1>", M.show_help)
-  map("v", "<F1>", M.show_help)
-  map("n", "<F2>", M.show_data_browser)
-  map("v", "<F2>", M.show_data_browser)
-  map("n", "<leader>e", M.execute_cell)
+  -- Change the mapping to start Stata with 'rr'
+  
+map("n", "<leader>ss", M.start_stata, { noremap = true, silent = true, desc = "Start Stata" })
+map("n", "<leader>sq", M.quit_stata, { noremap = true, silent = true, desc = "Quit Stata" })
+map("n", "<leader>sc", M.clear_memory, { noremap = true, silent = true, desc = "Clear Memory" })
+map("n", "<leader>sw", M.set_working_directory, { noremap = true, silent = true, desc = "Set Working Directory" })
+map("n", "<leader>sv", M.describe_variables, { noremap = true, silent = true, desc = "Describe Variables" })
+map("n", "<leader>sm", M.summarize_variables, { noremap = true, silent = true, desc = "Summarize Variables" })
+map("n", "<leader>sd", "<cmd>DoStata<cr>", { noremap = true, silent = true, desc = "Run Stata Command" })
+map("v", "<leader>sd", "<cmd>DoStata<cr>", { noremap = true, silent = true, desc = "Run Stata Command (Visual)" })
+map("n", "<leader>sr", "<cmd>DoStataFile<cr>", { noremap = true, silent = true, desc = "Run Stata File" })
+map("n", "<leader>su", "<cmd>DoStataUpToLine<cr>", { noremap = true, silent = true, desc = "Run Up to Line" })
+map("n", "<F1>", M.show_help, { noremap = true, silent = true, desc = "Show Help" })
+map("v", "<F1>", M.show_help, { noremap = true, silent = true, desc = "Show Help (Visual)" })
+map("n", "<F2>", M.show_data_browser, { noremap = true, silent = true, desc = "Show Data Browser" })
+map("v", "<F2>", M.show_data_browser, { noremap = true, silent = true, desc = "Show Data Browser (Visual)" })
+map("n", "<leader>se", M.execute_cell, { noremap = true, silent = true, desc = "Execute Cell" })
+
 end
 
 return {
   setup = M.setup,
+  quit_stata = M.quit_stata,
+  clear_memory = M.clear_memory,
+  set_working_directory = M.set_working_directory,
+  describe_variables = M.describe_variables,
+  summarize_variables = M.summarize_variables,
   run_line = M.run_line,
   run_whole_file = M.run_whole_file,
-  run_up_to_line = M.run_up_to_line,  -- Add new function to the returned table
+  run_up_to_line = M.run_up_to_line,
   show_help = M.show_help,
   show_data_browser = M.show_data_browser,
   execute_cell = M.execute_cell,
+  start_stata = M.start_stata,  -- Add the new function to the returned table
   config = M.config
 }
